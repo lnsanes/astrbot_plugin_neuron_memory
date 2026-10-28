@@ -1,0 +1,349 @@
+/**
+ * LivingMemory Dashboard - 主入口
+ * 使用模块化架构，保持主文件简洁清晰
+ */
+
+import {
+  ApiClient,
+  PeekPanel,
+
+  esc,
+} from "./modules/index.js";
+
+(() => {
+  "use strict";
+
+  /* ================================================================
+     State
+     ================================================================ */
+  const state = {
+    page: "graph",
+    memory: {
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      hasMore: false,
+      keyword: "",
+      session: "",
+      status: "all",
+      type: "all",
+      sort: "created_desc",
+      selectedIds: new Set(),
+    },
+    selectedMemory: null,
+    isEditing: false,
+    _detailCache: null,
+    _nodeDetailCache: null,
+    _recallCache: null,
+    _systemCache: null,
+    pendingSearch: null,
+  };
+
+  /* ================================================================
+     Initialize Modules
+     ================================================================ */
+  const api = new ApiClient();
+  const peekPanel = new PeekPanel(state, api);
+
+  function hydrateIcons() {
+    if (!window.lucide || typeof window.lucide.createIcons !== "function") return;
+    window.lucide.createIcons({
+      attrs: {
+        "stroke-width": 1.7,
+        "aria-hidden": "true",
+      },
+    });
+  }
+
+  function initMotionField() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    let frame = 0;
+    document.addEventListener("pointermove", (event) => {
+      if (frame || document.documentElement.dataset.style !== "editorial") return;
+      frame = window.requestAnimationFrame(() => {
+        const x = (event.clientX / Math.max(window.innerWidth, 1) - 0.5) * 12;
+        const y = (event.clientY / Math.max(window.innerHeight, 1) - 0.5) * 12;
+        document.documentElement.style.setProperty("--field-x", x.toFixed(2) + "px");
+        document.documentElement.style.setProperty("--field-y", y.toFixed(2) + "px");
+        frame = 0;
+      });
+    }, { passive: true });
+  }
+
+  /* ================================================================
+     Toast Notification
+     ================================================================ */
+  let toastTimer;
+  function showToast(msg, isError = false) {
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.classList.remove("visible", "error");
+    if (isError) el.classList.add("error");
+    void el.offsetWidth;
+    el.classList.add("visible");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.classList.remove("visible");
+    }, 2500);
+  }
+
+  /* ================================================================
+     Sidebar / Routing
+     ================================================================ */
+  let navigationGeneration = 0;
+  let pageInitialized = false;
+  async function switchPage(name) {
+    if (pageInitialized && name === state.page) return;
+    if (false) {
+      showToast(window.t("flow.waitForSave"));
+      return;
+    }
+    const generation = ++navigationGeneration;
+    if (!await peekPanel.requestClose() || generation !== navigationGeneration) return;
+    pageInitialized = true;
+    state.page = name;
+
+    document.querySelectorAll(".nav-item[data-page]").forEach(item => {
+      item.classList.toggle("active", item.dataset.page === name);
+      if (item.dataset.page === name) item.setAttribute("aria-current", "page");
+      else item.removeAttribute("aria-current");
+    });
+
+    document.querySelectorAll(".page").forEach(p => {
+      p.classList.toggle("active", p.id === "page-" + name);
+    });
+
+    if (name === "graph") {
+      fetchGraphStats();
+      if (window.ensureGraphScene) window.ensureGraphScene();
+    }
+    if (window.Graph2D && typeof window.Graph2D.setActive === "function") {
+      window.Graph2D.setActive(name === "graph");
+    }
+    if (name === "recall") { /* 召回页面按需加载 */ }
+  }
+
+  function normalizeLocale(locale) {
+    const lang = String(locale || "").split("-")[0];
+    return ["zh", "en", "ru"].includes(lang) ? lang : "zh";
+  }
+
+  function getCurrentLanguage() {
+    if (typeof window.getLanguage === "function") {
+      return window.getLanguage();
+    }
+    return normalizeLocale(api.bridge?.getLocale?.());
+  }
+
+  function initSidebar() {
+    document.querySelectorAll(".nav-item[data-page]").forEach(item => {
+      item.addEventListener("click", () => {
+        switchPage(item.dataset.page);
+      });
+    });
+
+    const langMenu = document.getElementById("lang-menu");
+    document.querySelectorAll(".lang-option[data-lang]").forEach(option => {
+      option.addEventListener("click", () => {
+        const lang = option.dataset.lang;
+        if (!lang) return;
+
+        if (typeof window.setLanguage === "function") {
+          window.setLanguage(lang, { persist: true, source: "user" });
+        } else {
+          try {
+            localStorage.setItem("lmem_lang", lang);
+          } catch (e) {
+            console.warn("[LM] Failed to save language to localStorage:", e);
+          }
+        }
+
+        if (langMenu) {
+          langMenu.removeAttribute("open");
+        }
+        if (typeof window.setLanguage !== "function") {
+          refreshDynamicI18n();
+        }
+        showToast(window.t("language.toast", option.textContent.trim()));
+      });
+    });
+
+    if (langMenu) {
+      langMenu.addEventListener("toggle", (e) => {
+        if (e.newState === "open") {
+          updateLanguageMenu();
+        }
+      });
+    }
+  }
+
+  function updateLanguageMenu() {
+    const currentLang = getCurrentLanguage();
+
+    document.querySelectorAll(".lang-option[data-lang]").forEach(option => {
+      const active = option.dataset.lang === currentLang;
+      option.classList.toggle("active", active);
+      option.setAttribute("aria-current", active ? "true" : "false");
+    });
+  }
+
+  function refreshDynamicI18n() {
+    updateLanguageMenu();
+
+    if (state.page === "memory") {
+    }
+    if (state.page === "recall" && state._recallCache) {
+    }
+    if (state.page === "system" && state._systemCache) {
+    }
+    if (false) {
+    }
+
+    const peekPanelEl = document.getElementById("peek-panel");
+    const peekVisible = peekPanelEl && peekPanelEl.classList.contains("visible");
+    if (peekVisible && !state.isEditing && !peekPanel._confirmResolve && !peekPanel._batchEditResolve) {
+      if (state._detailCache) {
+        peekPanel.renderDetailView(state._detailCache);
+      } else if (state._nodeDetailCache) {
+        peekPanel.renderNode(state._nodeDetailCache);
+      }
+    }
+  }
+
+  /* ================================================================
+     Graph Page (依赖 graph-ui.js)
+     ================================================================ */
+  async function fetchGraphStats() {
+    try {
+      const data = await api.get("stats");
+
+      document.getElementById("gs-total").textContent = data.total_memories || 0;
+      document.getElementById("gs-nodes").textContent = data.graph_nodes || 0;
+      document.getElementById("gs-edges").textContent = data.graph_edges || 0;
+
+      const sessions = data.sessions || {};
+      const sessionIds = typeof sessions === "object" ? Object.keys(sessions) : [];
+      document.getElementById("gs-sessions").textContent = sessionIds.length;
+
+      const sessionOptions = document.getElementById("graph-session-options");
+      if (sessionOptions) {
+        sessionOptions.innerHTML = sessionIds
+          .map(id => '<option value="' + esc(String(id)) + '"></option>')
+          .join("");
+      }
+    } catch (e) {
+      showToast(e.message || window.t("misc.statsFail"), true);
+    }
+  }
+
+  /* ================================================================
+     Initialization
+     ================================================================ */
+  async function init() {
+    hydrateIcons();
+    initMotionField();
+    window.LMAppearance.init();
+    const context = await api.ready();
+
+    if (api.bridge && typeof api.bridge.onContext === "function") {
+      api.bridge.onContext((ctx) => {
+        window.LMAppearance.setContext(ctx);
+
+        if (ctx && ctx.locale) {
+          updateLanguageMenu();
+        }
+      });
+    }
+
+    window.LMAppearance.setContext(context);
+
+    initSidebar();
+
+
+    document.getElementById("peek-close").addEventListener("click", () => peekPanel.requestClose());
+    document.getElementById("peek-overlay").addEventListener("click", () => peekPanel.requestClose());
+
+    document.addEventListener("keydown", async (e) => {
+      if (e.key === "Escape" && !document.querySelector("dialog[open]")) {
+        e.preventDefault();
+        if (!await peekPanel.handleEscape() && false) {
+        }
+      }
+    });
+    window.addEventListener("beforeunload", event => {
+      if (peekPanel.hasUnsavedChanges()) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    });
+    window.addEventListener("languagechange", refreshDynamicI18n);
+
+    fetchGraphStats();
+    switchPage("graph");
+  }
+
+  /* ================================================================
+     Global Exports (for graph-ui.js and other dependencies)
+     ================================================================ */
+  window.lmState = state;
+  window.lmShowToast = showToast;
+  window.lmSwitchPage = (name) => switchPage(name);
+  window.lmOpenPeekNode = (nodeData) => peekPanel.renderNode(nodeData);
+  window.lmOpenPeekMemory = (memory) => peekPanel.renderMemory(memory);
+  window.lmClosePeek = () => peekPanel.requestClose();
+  window.lmFetchGraphStats = fetchGraphStats;
+  window.lmRefreshMemories = () => {};
+  window.lmHydrateIcons = hydrateIcons;
+
+  // 图谱小视图绘制函数（如果需要）
+  window.lmDrawMiniGraph = (canvas, nodes, edges) => {
+    if (!canvas || !nodes || !nodes.length) return;
+
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width;
+    const H = canvas.height;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // 简单布局算法
+    const positions = nodes.map((node, i) => {
+      const angle = (i / nodes.length) * Math.PI * 2;
+      const r = Math.min(W, H) * 0.3;
+      return {
+        x: W / 2 + r * Math.cos(angle),
+        y: H / 2 + r * Math.sin(angle),
+        node
+      };
+    });
+
+    // 绘制边
+    if (edges && edges.length) {
+      ctx.strokeStyle = "rgba(100, 100, 100, 0.3)";
+      ctx.lineWidth = 1;
+      edges.forEach(edge => {
+        const source = positions.find(p => p.node.id === edge.source || p.node.id === edge.from);
+        const target = positions.find(p => p.node.id === edge.target || p.node.id === edge.to);
+        if (source && target) {
+          ctx.beginPath();
+          ctx.moveTo(source.x, source.y);
+          ctx.lineTo(target.x, target.y);
+          ctx.stroke();
+        }
+      });
+    }
+
+    // 绘制节点
+    positions.forEach(pos => {
+      ctx.fillStyle = "#4a90e2";
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  };
+
+  // Graph UI registers its DOMContentLoaded initializer before this module.
+  // A cached Bridge can resolve immediately, so wait for the canvas to be ready.
+  document.addEventListener("DOMContentLoaded", init, { once: true });
+})();

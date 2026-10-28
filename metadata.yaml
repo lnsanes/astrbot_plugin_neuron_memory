@@ -1,0 +1,6 @@
+name: astrbot_plugin_neuron_memory
+display_name: 神经元记忆
+desc: 连续权重 · 每日衰减 · 遗忘不删 · 深查可及；提供 recall_memory / memorize 两个工具
+version: v1.0.0
+author: 小肥鱼
+repo: https://github.com/

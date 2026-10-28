@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小肥鱼 · 记忆图谱</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0e0f12;color:#d7dae0;font:14px/1.5 -apple-system,"Segoe UI",sans-serif;height:100vh;overflow:hidden}
+header{padding:12px 18px;border-bottom:1px solid #22242b;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+h1{font-size:15px;font-weight:600}
+.stat{font-size:12px;color:#8b90a0}
+.stat b{color:#e8eaf0;font-weight:600}
+.wrap{display:flex;height:calc(100vh - 50px)}
+#canvas-box{flex:1;position:relative}
+canvas{display:block;width:100%;height:100%}
+#side{width:340px;border-left:1px solid #22242b;display:flex;flex-direction:column}
+#side h2{font-size:12px;color:#8b90a0;padding:10px 14px;border-bottom:1px solid #1a1c22;font-weight:500}
+#list{flex:1;overflow-y:auto}
+.item{padding:8px 14px;border-bottom:1px solid #16181d;cursor:pointer;font-size:12px}
+.item:hover{background:#16181d}
+.item.sel{background:#1d2330;border-left:2px solid #4d7cff}
+.item .t{color:#c8ccd6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.item .m{color:#666c7c;font-size:11px;margin-top:2px}
+.bar{height:3px;background:#22242b;border-radius:2px;margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#3b6ef0,#7aa2ff)}
+#detail{padding:12px 14px;border-top:1px solid #22242b;font-size:12px;max-height:38%;overflow-y:auto}
+#detail .big{color:#e8eaf0;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
+#detail .kv{color:#7b8090;margin:2px 0}
+#detail button{background:#1d2330;color:#9fb4ff;border:1px solid #2c3852;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:6px;margin-top:8px}
+#detail button:hover{background:#243049}
+#tip{position:absolute;left:12px;bottom:12px;font-size:11px;color:#5c6272}
+</style>
+</head>
+<body>
+<header>
+  <h1>小肥鱼 · 记忆图谱</h1>
+  <div class="stat">节点 <b id="s-n">0</b></div>
+  <div class="stat">连线 <b id="s-e">0</b></div>
+  <div class="stat">清醒(w&gt;0.5) <b id="s-ok">0</b></div>
+  <div class="stat">模糊(0.2-0.5) <b id="s-faint">0</b></div>
+  <div class="stat">快忘(&lt;0.2) <b id="s-gone">0</b></div>
+</header>
+<div class="wrap">
+  <div id="canvas-box"><canvas id="cv"></canvas><div id="tip">拖动节点 · 滚轮缩放 · 点节点看详情</div></div>
+  <div id="side">
+    <h2>记忆（按权重排序）</h2>
+    <div id="list"></div>
+    <div id="detail"><div class="kv">点一个节点或条目</div></div>
+  </div>
+</div>
+<script>
+var API = "/api/plug/neuron";
+var nodes = [], edges = [], sel = null;
+var cv = document.getElementById("cv"), cx = cv.getContext("2d");
+var W = 0, H = 0, scale = 1, ox = 0, oy = 0, drag = null;
+function resize(){ W = cv.width = cv.clientWidth * devicePixelRatio; H = cv.height = cv.clientHeight * devicePixelRatio; cx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); W = cv.clientWidth; H = cv.clientHeight; }
+window.addEventListener("resize", resize);
+function wcolor(w){ if (w >= 0.5) return "#4d7cff"; if (w >= 0.2) return "#c9a227"; return "#5a5f6e"; }
+function load(){
+  fetch(API + "/graph").then(function(r){ return r.json(); }).then(function(j){
+    var d = j.data || j;
+    nodes = d.nodes || []; edges = d.edges || [];
+    var ok=0, faint=0, gone=0;
+    nodes.forEach(function(n){
+      var a = Math.random()*Math.PI*2, rr = 60 + Math.random()*240;
+      n.x = Math.cos(a)*rr; n.y = Math.sin(a)*rr; n.vx = 0; n.vy = 0;
+      if (n.w >= 0.5) ok++; else if (n.w >= 0.2) faint++; else gone++;
+    });
+    document.getElementById("s-n").textContent = nodes.length;
+    document.getElementById("s-e").textContent = edges.length;
+    document.getElementById("s-ok").textContent = ok;
+    document.getElementById("s-faint").textContent = faint;
+    document.getElementById("s-gone").textContent = gone;
+    renderList(); simulate();
+  });
+}
+function renderList(){
+  var box = document.getElementById("list"); box.innerHTML = "";
+  nodes.slice().sort(function(a,b){ return b.w - a.w; }).forEach(function(n){
+    var el = document.createElement("div");
+    el.className = "item" + (sel && sel.id === n.id ? " sel" : "");
+    el.innerHTML = "<div class=\"t\"></div><div class=\"m\"></div><div class=\"bar\"><i style=\"width:" + Math.round(n.w*100) + "%\"></i></div>";
+    el.querySelector(".t").textContent = n.text;
+    el.querySelector(".m").textContent = n.day + " · 权重 " + n.w.toFixed(2) + " · " + n.source;
+    el.onclick = function(){ sel = n; renderList(); showDetail(n); };
+    box.appendChild(el);
+  });
+}
+function showDetail(n){
+  var d = document.getElementById("detail");
+  d.innerHTML = "";
+  var t = document.createElement("div"); t.className = "big"; t.textContent = n.text; d.appendChild(t);
+  [["权重", n.w.toFixed(3)], ["重要度", n.imp.toFixed(2)], ["日期", n.day], ["来源", n.source], ["访问次数", n.access], ["半衰期", (3 + 30*n.imp).toFixed(0) + " 天"]].forEach(function(p){
+    var k = document.createElement("div"); k.className = "kv"; k.textContent = p[0] + "：" + p[1]; d.appendChild(k);
+  });
+  var b1 = document.createElement("button"); b1.textContent = "强化 +";
+  b1.onclick = function(){ fetch(API + "/boost/" + n.id).then(load); };
+  var b2 = document.createElement("button"); b2.textContent = "手动遗忘";
+  b2.onclick = function(){ fetch(API + "/fade/" + n.id).then(load); };
+  d.appendChild(b1); d.appendChild(b2);
+}
+function simulate(){
+  var iter = 0;
+  function step(){
+    iter++;
+    var n = nodes.length;
+    for (var i = 0; i < n; i++){
+      var a = nodes[i];
+      for (var j = i+1; j < n; j++){
+        var b = nodes[j];
+        var dx = b.x - a.x, dy = b.y - a.y;
+        var d2 = dx*dx + dy*dy + 0.01;
+        var f = 900 / d2;
+        var dd = Math.sqrt(d2);
+        var fx = dx/dd*f, fy = dy/dd*f;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+      }
+      a.vx -= a.x * 0.004; a.vy -= a.y * 0.004;
+    }
+    edges.forEach(function(e){
+      var a = nodes[e.s], b = nodes[e.t];
+      if (!a || !b) return;
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var d = Math.sqrt(dx*dx + dy*dy) + 0.01;
+      var f = (d - 70) * 0.02 * e.w;
+      var fx = dx/d*f, fy = dy/d*f;
+      a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+    });
+    nodes.forEach(function(a){
+      a.vx *= 0.85; a.vy *= 0.85;
+      a.x += a.vx; a.y += a.vy;
+    });
+    draw();
+    if (iter < 400) requestAnimationFrame(step);
+  }
+  step();
+}
+function draw(){
+  cx.clearRect(0,0,W,H);
+  cx.save(); cx.translate(W/2 + ox, H/2 + oy); cx.scale(scale, scale);
+  edges.forEach(function(e){
+    var a = nodes[e.s], b = nodes[e.t];
+    if (!a || !b) return;
+    cx.strokeStyle = "rgba(77,124,255," + Math.min(0.45, e.w*0.5) + ")";
+    cx.lineWidth = 0.6 + e.w;
+    cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
+  });
+  nodes.forEach(function(n){
+    var r = 3 + n.w * 9;
+    cx.beginPath(); cx.arc(n.x, n.y, r, 0, Math.PI*2);
+    cx.fillStyle = wcolor(n.w);
+    cx.globalAlpha = 0.35 + n.w * 0.65;
+    cx.fill(); cx.globalAlpha = 1;
+    if (sel && sel.id === n.id){
+      cx.strokeStyle = "#fff"; cx.lineWidth = 1.5;
+      cx.beginPath(); cx.arc(n.x, n.y, r + 4, 0, Math.PI*2); cx.stroke();
+    }
+  });
+  cx.restore();
+}
+cv.addEventListener("mousedown", function(e){
+  var mx = (e.offsetX - W/2 - ox)/scale, my = (e.offsetY - H/2 - oy)/scale;
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i], dx = n.x - mx, dy = n.y - my;
+    if (dx*dx + dy*dy < 200){ sel = n; drag = n; renderList(); showDetail(n); return; }
+  }
+  drag = { ox: ox, oy: oy, sx: e.offsetX, sy: e.offsetY };
+});
+cv.addEventListener("mousemove", function(e){
+  if (!drag) return;
+  if (drag.ox !== undefined){ ox = drag.ox + (e.offsetX - drag.sx); oy = drag.oy + (e.offsetY - drag.sy); draw(); }
+  else { drag.x = (e.offsetX - W/2 - ox)/scale; drag.y = (e.offsetY - H/2 - oy)/scale; drag.vx = 0; drag.vy = 0; draw(); }
+});
+window.addEventListener("mouseup", function(){ drag = null; });
+cv.addEventListener("wheel", function(e){ e.preventDefault(); scale = Math.max(0.3, Math.min(3, scale * (e.deltaY > 0 ? 0.9 : 1.1))); draw(); }, { passive:false });
+resize(); load();
+</script>
+</body>
+</html>

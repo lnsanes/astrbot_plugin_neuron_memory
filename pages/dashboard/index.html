@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title data-i18n="page.title">LivingMemory</title>
+    <script src="./appearance.js"></script>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./art-direction.css" />
+    <link rel="stylesheet" href="./themes.css" />
+    <link rel="stylesheet" href="./workflows.css" />
+    <script src="./vendor/lucide.min.js"></script>
+    <script src="./i18n.js"></script>
+  </head>
+  <body>
+    <div id="app"><aside class="sidebar"><div class="sidebar-brand" aria-label="NeuronMemory"><span class="brand-mark">NM</span><span class="brand-name"><strong>Neuron</strong><strong>Memory</strong></span></div><nav class="sidebar-nav"><button class="nav-item active" data-page="graph"><i data-lucide="network" aria-hidden="true"></i><span>知识图谱</span></button><button class="nav-item" data-page="memlist"><i data-lucide="list" aria-hidden="true"></i><span>记忆列表</span></button></nav><div class="sidebar-divider"></div></aside>
+      <!-- Sidebar -->
+      
+
+      <!-- Main Content -->
+      <main class="main-content">
+
+        <!-- Page: Graph -->
+        <section class="page active" id="page-graph">
+          <header class="page-header">
+            <div class="page-heading"><span class="page-index">01</span><span class="page-title" data-i18n="nav.graph">Knowledge Graph</span></div>
+            <div class="page-actions">
+              <input type="text" id="graph-session-filter" list="graph-session-options" data-i18n-aria="graph.sessionPh" class="input input-sm" data-i18n-placeholder="graph.sessionPh" placeholder="Session ID" style="width:180px" />
+              <datalist id="graph-session-options"></datalist>
+              <button class="btn btn-secondary btn-sm" id="graph-overview-btn" data-i18n-aria="graph.overviewBtn">
+                <i data-lucide="layout-dashboard" aria-hidden="true"></i>
+                <span data-i18n="graph.overviewBtn">Overview</span>
+              </button>
+            </div>
+          </header>
+          <div class="page-body graph-page-body">
+            <div class="stat-pills" id="graph-stat-pills">
+              <div class="stat-pill"><div class="stat-pill-value" id="gs-total">--</div><div class="stat-pill-label" data-i18n="stats.total">memories</div></div>
+              <div class="stat-pill"><div class="stat-pill-value" id="gs-nodes">--</div><div class="stat-pill-label" data-i18n="graph.nodes">nodes</div></div>
+              <div class="stat-pill"><div class="stat-pill-value" id="gs-edges">--</div><div class="stat-pill-label" data-i18n="graph.edges">relations</div></div>
+              <div class="stat-pill"><div class="stat-pill-value" id="gs-sessions">--</div><div class="stat-pill-label" data-i18n="stats.sessions">sessions</div></div>
+            </div>
+            <div class="graph-canvas-container" style="flex:1">
+              <div class="graph-canvas-state" id="graph-canvas-state"></div>
+              <div id="graph-canvas" class="graph-canvas"></div>
+            </div>
+            <div class="graph-legend" id="graph-legend"></div>
+            <div class="graph-toolbar">
+              <div class="graph-operation">
+                <input type="text" id="graph-query-input" data-i18n-aria="graph.queryPh" class="input" data-i18n-placeholder="graph.queryPh" placeholder="Search entities, topics, or memories..." />
+                <button class="btn btn-primary btn-sm" id="graph-search-btn">
+                  <i data-lucide="search" aria-hidden="true"></i>
+                  <span data-i18n="graph.searchBtn">Search</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+<section class="page" id="page-memlist"><header class="page-header"><div class="page-heading"><span class="page-index">02</span><span class="page-title">记忆列表</span></div><div class="page-actions"><input type="text" id="nm-search" class="input input-sm" placeholder="搜索记忆内容…" style="width:240px" /><button class="btn btn-secondary btn-sm" id="nm-refresh">刷新</button></div></header><div class="page-body" style="overflow:auto;padding:0 4px"><div id="nm-stats" style="padding:8px 12px;color:#8b93a5;font-size:12px"></div><div id="nm-list"></div></div></section>
+
+        <!-- Page: Memory -->
+        
+              </div>
+            </details>
+            
+            
+            
+          </div>
+        </section>
+
+        <!-- Page: Recall Test -->
+        <!-- Page: System -->
+        <!-- Page: Prompts -->
+        </main>
+    </div>
+
+    
+
+    <!-- Appearance preferences apply immediately and remain local to this browser. -->
+    
+
+    <!-- Peek Panel -->
+    <div class="peek-overlay" id="peek-overlay"></div>
+    <aside class="peek-panel" id="peek-panel" aria-hidden="true" inert>
+      <div class="peek-header">
+        <div>
+          <div id="peek-badge"></div>
+          <div class="peek-title" id="peek-title">--</div>
+        </div>
+        <button class="peek-close" id="peek-close" data-i18n-title="common.close" aria-label="Close">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="peek-body" id="peek-body"></div>
+    </aside>
+
+    <!-- Toast -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="./graph-shared.js"></script>
+    <script src="./graph-layout-core.js"></script>
+    <script src="./graph-renderer.js"></script>
+    <script src="./graph-interaction.js"></script>
+    <script src="./graph-2d.js"></script>
+    <script src="./graph-ui.js"></script>
+    <script type="module" src="./app.js"></script>
+  <script>
+(function(){
+  var loaded = false;
+  function el(id){ return document.getElementById(id); }
+  function wcolor(w){ if (w >= 0.5) return "#78a94b"; if (w >= 0.2) return "#c58c2a"; return "#74868a"; }
+  function bridge(){ return window.AstrBotPluginPage || null; }
+  async function nmLoad(){
+    var b = bridge();
+    if (!b) { el("nm-stats").textContent = "缺少 bridge"; return; }
+    var kw = (el("nm-search").value || "").trim();
+    el("nm-stats").textContent = "加载中…";
+    try {
+      var r = await b.apiGet("page/memories", { page: 1, page_size: 120, keyword: kw });
+      var d = (r && r.data) ? r.data : r;
+      var items = d.items || [];
+      el("nm-stats").textContent = (d.total || items.length) + " 条" + (kw ? "（匹配 " + items.length + "）" : "");
+      var box = el("nm-list"); box.innerHTML = "";
+      items.forEach(function(it){
+        var row = document.createElement("div");
+        row.style.cssText = "padding:9px 12px;border-bottom:1px solid #16181d;cursor:pointer";
+        row.onmouseenter = function(){ row.style.background = "#12141a"; };
+        row.onmouseleave = function(){ row.style.background = ""; };
+        var head = document.createElement("div");
+        head.style.cssText = "display:flex;align-items:center;gap:8px;font-size:11px;color:#6d7382;margin-bottom:3px";
+        head.innerHTML = '<span style="color:' + wcolor(it.weight) + ';font-weight:600">' + it.weight.toFixed(2) + '</span>'
+          + '<span>重要 ' + it.importance.toFixed(2) + '</span>'
+          + '<span>' + it.created_at + '</span>'
+          + '<span style="color:#4b515f">' + (it.tags || it.source || "") + '</span>';
+        var body = document.createElement("div");
+        body.style.cssText = "font-size:12.5px;color:#ccd2db;white-space:pre-wrap;word-break:break-word";
+        body.textContent = it.text || it.summary || "";
+        row.appendChild(head); row.appendChild(body);
+        if (it.entities && it.entities.length) {
+          var ents = document.createElement("div");
+          ents.style.cssText = "font-size:11px;color:#5d6473;margin-top:3px";
+          ents.textContent = "实体：" + it.entities.join(" / ");
+          row.appendChild(ents);
+        }
+        row.onclick = function(){
+          var d2 = document.createElement("div");
+          d2.style.cssText = "padding:8px 12px;background:#161d2b;border-left:2px solid #78a94b;font-size:11.5px;color:#9aa3b2";
+          d2.textContent = "权重 " + it.weight.toFixed(3) + " · 重要 " + it.importance.toFixed(3) + " · 访问 " + (it.access_count||0) + " 次 · 半衰期 " + (3 + 30*it.importance).toFixed(0) + " 天";
+          if (row.nextSibling && row.nextSibling.dataset && row.nextSibling.dataset.nmdetail) { row.nextSibling.remove(); return; }
+          d2.dataset.nmdetail = "1";
+          row.parentNode.insertBefore(d2, row.nextSibling);
+        };
+        box.appendChild(row);
+      });
+      loaded = true;
+    } catch (e) {
+      el("nm-stats").textContent = "加载失败：" + (e && e.message ? e.message : e);
+    }
+  }
+  function hook(){
+    var btn = el("nm-refresh"); if (btn) btn.onclick = nmLoad;
+    var inp = el("nm-search");
+    if (inp) { var t = null; inp.oninput = function(){ clearTimeout(t); t = setTimeout(nmLoad, 300); }; }
+    var nav = document.querySelector('[data-page="memlist"]');
+    if (nav) nav.addEventListener("click", function(){ setTimeout(function(){ if(!loaded) nmLoad(); }, 120); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook);
+  else hook();
+})();
+</script>
+</body>
+</html>
